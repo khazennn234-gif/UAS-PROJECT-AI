@@ -1,0 +1,13 @@
+train: ../train/images
+val: ../valid/images
+test: ../test/images
+
+nc: 17
+names: ['fresh apple', 'fresh banana', 'fresh bellpepper', 'fresh carrot', 'fresh cucumber', 'fresh mango', 'fresh orange', 'fresh potato', 'rotten apple', 'rotten banana', 'rotten carrot', 'rotten cucumber', 'rotten mango', 'rotten orange', 'rotten potato', 'rotten tomato', 'rottenbellpepper']
+
+roboflow:
+  workspace: college-74jj5
+  project: freshness-fruits-and-vegetables
+  version: 7
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/college-74jj5/freshness-fruits-and-vegetables/dataset/7

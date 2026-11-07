@@ -1,0 +1,23 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# PyTorch weights & checkpoints
+*.pt
+runs/
+
+# Large Dataset Media (9000+ files - available via Roboflow)
+freshness  fruits and vegetables.v7i.yolov8/train/
+freshness  fruits and vegetables.v7i.yolov8/valid/
+freshness  fruits and vegetables.v7i.yolov8/test/
+
+# Output media & screenshots
+*.mp4
+*.avi
+screenshot_*.jpg
+hasil_analisis_*.jpg
+
+# OS generated files
+Thumbs.db
+.DS_Store
