@@ -35,15 +35,18 @@ if not os.path.exists(model_path):
 model = YOLO(model_path)
 model.to(device)
 
-# Daftar 17 kelas dari dataset Roboflow + kelas dasar COCO (sebelum training)
-focused_classes = [
+# Daftar buah dan sayuran
+buah_classes = [
     'fresh apple', 'fresh banana', 'fresh bellpepper', 'fresh carrot',
     'fresh cucumber', 'fresh mango', 'fresh orange', 'fresh potato',
     'rotten apple', 'rotten banana', 'rotten carrot', 'rotten cucumber',
     'rotten mango', 'rotten orange', 'rotten potato', 'rotten tomato',
     'rottenbellpepper',
-    'apple', 'banana', 'orange'
+    'apple', 'banana', 'orange', 'carrot', 'broccoli'
 ]
+
+# Daftar kelas fokus gabungan (mencakup buah dan objek umum seperti person dari YOLO.py)
+focused_classes = buah_classes + ['person', 'cell phone', 'cup', 'bottle', 'bowl', 'chair']
 
 # ----------------------------------------------------------------------
 # 2. BASIS PENGETAHUAN NUTRISI (9 Komoditas dari Dataset)
@@ -240,6 +243,7 @@ def proses_deteksi(frame):
     """Menjalankan deteksi YOLO, ekstraksi citra, dan Fuzzy Logic"""
     results = model(frame)
     hasil_deteksi = []
+    label_counts = {}
 
     for result in results:
         boxes = result.boxes
@@ -251,38 +255,63 @@ def proses_deteksi(frame):
             confidence = float(box.conf[0])
             label = names[cls_id]
 
-            # Filter kelas dan confidence (seperti di YOLO.py praktikum)
-            if confidence > 0.25 and label in focused_classes:
-                # Ambil area ROI buah
-                roi = frame[y1:y2, x1:x2]
-                skor_warna, skor_kondisi = ekstrak_fitur_citra(roi, label)
+            # Filter confidence (0.20 agar sangat peka terhadap objek di depan kamera)
+            if confidence > 0.20:
+                label_counts[label] = label_counts.get(label, 0) + 1
 
-                # Evaluasi Fuzzy
-                skor_fuzzy, kematangan, kesegaran, tag, warna_box = hitung_kesegaran_fuzzy(skor_warna, skor_kondisi)
-                nama_buah = dapatkan_nama_buah(label)
+                # Jika objek terdeteksi adalah buah/sayuran
+                if label in buah_classes:
+                    # Ambil area ROI buah
+                    roi = frame[y1:y2, x1:x2]
+                    skor_warna, skor_kondisi = ekstrak_fitur_citra(roi, label)
 
-                hasil_deteksi.append({
-                    "buah": nama_buah,
-                    "label": label,
-                    "confidence": confidence * 100.0,
-                    "kematangan": kematangan,
-                    "kesegaran": kesegaran,
-                    "skor_kesegaran": skor_fuzzy,
-                    "tag": tag
-                })
+                    # Evaluasi Fuzzy
+                    skor_fuzzy, kematangan, kesegaran, tag, warna_box = hitung_kesegaran_fuzzy(skor_warna, skor_kondisi)
+                    nama_buah = dapatkan_nama_buah(label)
 
-                # Gambar bounding box dan label (sama seperti YOLO.py praktikum)
-                cv2.rectangle(frame, (x1, y1), (x2, y2), warna_box, 2)
-                teks = f"{nama_buah.upper()} {tag} {confidence*100:.0f}%"
-                cv2.putText(
-                    frame,
-                    teks,
-                    (x1, y1 - 10),
-                    cv2.FONT_HERSHEY_PLAIN,
-                    1.2,
-                    warna_box,
-                    2
-                )
+                    hasil_deteksi.append({
+                        "buah": nama_buah,
+                        "label": label,
+                        "confidence": confidence * 100.0,
+                        "kematangan": kematangan,
+                        "kesegaran": kesegaran,
+                        "skor_kesegaran": skor_fuzzy,
+                        "tag": tag
+                    })
+
+                    # Gambar bounding box berwarna berdasarkan kesegaran
+                    cv2.rectangle(frame, (x1, y1), (x2, y2), warna_box, 2)
+                    teks = f"{nama_buah.upper()} {tag} {confidence*100:.0f}%"
+                    cv2.putText(
+                        frame,
+                        teks,
+                        (x1, y1 - 10),
+                        cv2.FONT_HERSHEY_PLAIN,
+                        1.2,
+                        warna_box,
+                        2
+                    )
+                else:
+                    # Jika objek umum seperti manusia (person), botol, dll sesuai YOLO.py praktikum
+                    # Tetap gambar bounding box hijau agar pengguna tahu model aktif bekerja!
+                    cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                    cv2.putText(
+                        frame,
+                        f"{label} {confidence*100:.0f}%",
+                        (x1, y1 - 10),
+                        cv2.FONT_HERSHEY_PLAIN,
+                        1.2,
+                        (0, 255, 0),
+                        2
+                    )
+
+        # Tampilkan teks ringkasan jumlah objek di pojok kiri atas (persis seperti di YOLO.py praktikum)
+        if label_counts:
+            summary = ", ".join([f"{v} {k}" for k, v in label_counts.items() if v > 0])
+            box_padding = 12
+            (text_width, text_height), _ = cv2.getTextSize(summary, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
+            cv2.rectangle(frame, (5, 5), (5 + text_width + box_padding, 5 + text_height + box_padding), (0, 255, 0), -1)
+            cv2.putText(frame, summary, (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 2, cv2.LINE_AA)
 
     return frame, hasil_deteksi
 
