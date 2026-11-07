@@ -5,6 +5,7 @@ __pycache__/
 
 # PyTorch weights & checkpoints
 *.pt
+!best_fruit.pt
 runs/
 
 # Large Dataset Media (9000+ files - available via Roboflow)
@@ -21,3 +22,4 @@ hasil_analisis_*.jpg
 # OS generated files
 Thumbs.db
 .DS_Store
+

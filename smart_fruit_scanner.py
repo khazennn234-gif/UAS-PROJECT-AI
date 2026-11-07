@@ -14,6 +14,7 @@ apple, banana, bellpepper, carrot, cucumber, mango, orange, potato, tomato
 """
 
 import os
+import glob
 import cv2
 import numpy as np
 import torch
@@ -27,26 +28,39 @@ from skfuzzy import control as ctrl
 # ----------------------------------------------------------------------
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-# Path model: jika ada model hasil training gunakan best.pt, jika belum gunakan yolov8n.pt
-model_path = "runs/fruit_freshness/smart_fruit_scanner/weights/best.pt"
-if not os.path.exists(model_path):
-    model_path = "yolov8n.pt"
+# Prioritaskan model hasil fine-tuning dataset buah (17 kelas)
+model_candidates = [
+    "best_fruit.pt",
+    "runs/fruit_freshness/smart_fruit_scanner/weights/best.pt",
+    "runs/detect/runs/fruit_freshness/smart_fruit_scanner/weights/best.pt",
+    "yolov8n.pt"
+]
 
+model_path = "yolov8n.pt"
+for candidate in model_candidates:
+    if os.path.exists(candidate):
+        model_path = candidate
+        break
+
+print(f"[INFO] Memuat model YOLO: {model_path} pada perangkat: {device.upper()}")
 model = YOLO(model_path)
 model.to(device)
 
-# Daftar buah dan sayuran
+# Daftar semua kelas buah dan sayuran yang didukung
 buah_classes = [
+    # 17 Kelas dari Dataset Roboflow
     'fresh apple', 'fresh banana', 'fresh bellpepper', 'fresh carrot',
     'fresh cucumber', 'fresh mango', 'fresh orange', 'fresh potato',
     'rotten apple', 'rotten banana', 'rotten carrot', 'rotten cucumber',
     'rotten mango', 'rotten orange', 'rotten potato', 'rotten tomato',
     'rottenbellpepper',
+    # Kelas dari COCO pretrained (jika menggunakan yolov8n.pt)
     'apple', 'banana', 'orange', 'carrot', 'broccoli'
 ]
 
-# Daftar kelas fokus gabungan (mencakup buah dan objek umum seperti person dari YOLO.py)
-focused_classes = buah_classes + ['person', 'cell phone', 'cup', 'bottle', 'bowl', 'chair']
+# HANYA kelas buah yang dimasukkan ke focused_classes
+# Objek selain buah (orang, kursi, handphone, dll) TIDAK akan diproses
+focused_classes = buah_classes
 
 # ----------------------------------------------------------------------
 # 2. BASIS PENGETAHUAN NUTRISI (9 Komoditas dari Dataset)
@@ -57,8 +71,8 @@ database_nutrisi = {
         "kalori": "52 kkal / 100g",
         "vitamin": "Vitamin C (4.6 mg), Serat Pektin",
         "khasiat": "Menjaga kesehatan jantung dan melancarkan pencernaan.",
-        "kematangan_info": "Saat matang kandungan pektin dan rasa manis seimbang. Jika terlalu matang tekstur bertepung.",
-        "tips": "Pilih yang padat saat ditekan dan kulitnya tidak keriput."
+        "kematangan_info": "Saat matang kandungan pektin dan rasa manis seimbang. Jika lewat matang tekstur bertepung.",
+        "tips": "Pilih yang padat saat ditekan dan kulitnya cerah tidak berkerut."
     },
     "banana": {
         "nama": "Pisang",
@@ -81,7 +95,7 @@ database_nutrisi = {
         "kalori": "41 kkal / 100g",
         "vitamin": "Beta-karoten (Vitamin A), Serat",
         "khasiat": "Baik untuk kesehatan retina mata dan sistem imunitas.",
-        "kematangan_info": "Wortel muda/mentah tekstur renyah keras, wortel matang warna oranye cerah merata.",
+        "kematangan_info": "Wortel muda tekstur renyah manis, wortel matang warna oranye cerah merata.",
         "tips": "Pilih yang keras dari pangkal hingga ujung, warna cerah tidak kusam."
     },
     "cucumber": {
@@ -90,7 +104,7 @@ database_nutrisi = {
         "vitamin": "Kadar Air 95%, Vitamin K, Mineral Silika",
         "khasiat": "Menghidrasi tubuh dan menjaga kesejukan pencernaan.",
         "kematangan_info": "Mentimun segar berwarna hijau tua padat. Jika menguning menandakan sudah lewat matang.",
-        "tips": "Pilih yang lurus, padat, dan kulitnya hijau segar tidak keriput."
+        "tips": "Pilih yang lurus, padat, dan kulitnya hijau segar tidak lembek."
     },
     "mango": {
         "nama": "Mangga",
@@ -98,7 +112,7 @@ database_nutrisi = {
         "vitamin": "Vitamin C (36 mg), Vitamin A, Antioksidan",
         "khasiat": "Mendukung kesehatan mata dan regenerasi sel tubuh.",
         "kematangan_info": "Mangga mentah masam tinggi vitamin C, saat matang menjadi manis harum dan berair.",
-        "tips": "Pilih yang pangkalnya mengeluarkan aroma manis dan sedikit lunak saat ditekan."
+        "tips": "Pilih yang pangkalnya harum dan sedikit lunak saat ditekan lembut."
     },
     "orange": {
         "nama": "Jeruk",
@@ -106,7 +120,7 @@ database_nutrisi = {
         "vitamin": "Vitamin C (53 mg), Asam Folat",
         "khasiat": "Menangkal radikal bebas dan menjaga daya tahan tubuh.",
         "kematangan_info": "Jeruk mentah kulit hijau dan asam, saat matang kulit oranye kekuningan dengan sari manis.",
-        "tips": "Pilih buah yang terasa berat dan kulitnya halus tidak keropos."
+        "tips": "Pilih buah yang terasa berat dan kulitnya halus berpori rapat."
     },
     "potato": {
         "nama": "Kentang",
@@ -122,7 +136,7 @@ database_nutrisi = {
         "vitamin": "Likopen (Antioksidan), Vitamin C, Kalium",
         "khasiat": "Menjaga kesehatan jantung dan pembuluh darah.",
         "kematangan_info": "Tomat hijau adalah fase mentah, saat matang merah menyala dengan kadar likopen tertinggi.",
-        "tips": "Pilih warna merah merata, kelopak hijau masih menempel, dan kenyal."
+        "tips": "Pilih warna merah merata, kelopak hijau masih menempel, dan kenyal padat."
     }
 }
 
@@ -138,7 +152,7 @@ def buat_sistem_fuzzy():
     # Variabel Output
     kesegaran = ctrl.Consequent(np.arange(0, 101, 1), 'kesegaran')
 
-    # Fungsi Keanggotaan (Membership Function trimf seperti di FUZZY.py)
+    # Fungsi Keanggotaan (trimf seperti di FUZZY.py)
     warna['mentah'] = fuzz.trimf(warna.universe, [0, 0, 45])
     warna['matang'] = fuzz.trimf(warna.universe, [30, 60, 85])
     warna['lewat_matang'] = fuzz.trimf(warna.universe, [70, 100, 100])
@@ -168,14 +182,14 @@ def hitung_kesegaran_fuzzy(skor_warna, skor_kondisi):
     """Menghitung skor kesegaran menggunakan sistem fuzzy"""
     pengendali_fuzzy.input['warna'] = np.clip(skor_warna, 0, 100)
     pengendali_fuzzy.input['kondisi'] = np.clip(skor_kondisi, 0, 100)
-    
+
     try:
         pengendali_fuzzy.compute()
         hasil = pengendali_fuzzy.output['kesegaran']
     except Exception:
         hasil = (skor_warna + skor_kondisi) / 2.0
 
-    # Menentukan kategori kematangan dan kesegaran
+    # Menentukan kategori kematangan
     if skor_warna < 35:
         kematangan = "Mentah"
     elif skor_warna < 70:
@@ -183,6 +197,7 @@ def hitung_kesegaran_fuzzy(skor_warna, skor_kondisi):
     else:
         kematangan = "Terlalu Matang"
 
+    # Menentukan kategori kesegaran dan warna bounding box
     if hasil >= 65:
         status_kesegaran = "Segar Secara Visual"
         tag = "[SEGAR]"
@@ -199,34 +214,60 @@ def hitung_kesegaran_fuzzy(skor_warna, skor_kondisi):
     return hasil, kematangan, status_kesegaran, tag, warna_box
 
 # ----------------------------------------------------------------------
-# 4. EKSTRAKSI FITUR CITRA SEDERHANA MENGGUNAKAN OPENCV
-# (Menggunakan fungsi dasar OpenCV: cvtColor, mean)
+# 4. EKSTRAKSI FITUR CITRA MENGGUNAKAN OPENCV
+# (Menggunakan fungsi dasar OpenCV: cvtColor, mean, mask)
 # ----------------------------------------------------------------------
 def ekstrak_fitur_citra(roi, label_yolo):
-    """Mengekstrak rata-rata warna dan kondisi citra buah"""
+    """Mengekstrak rata-rata warna, saturasi, dan kondisi visual buah"""
     if roi is None or roi.size == 0:
         return 50.0, 50.0
 
-    # Konversi ke HSV untuk melihat rata-rata komponen warna
+    # Konversi ke ruang warna HSV menggunakan OpenCV
     hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
-    h_mean = np.mean(hsv[:, :, 0])  # Komponen warna (Hue)
-    v_mean = np.mean(hsv[:, :, 2])  # Komponen kecerahan (Value)
 
-    # Indikator warna kematangan sederhana (0 - 100)
-    # Hue hijau berkisar 35-85, kuning/oranye/merah 0-30
-    if 35 <= h_mean <= 85:
-        skor_warna = 25.0   # Cenderung hijau (mentah)
-    elif h_mean < 35 or h_mean > 160:
-        skor_warna = 60.0   # Kuning / merah / oranye (matang)
-    else:
-        skor_warna = 80.0   # Cokelat / gelap (lewat matang)
+    # Masking piksel buah (mengabaikan piksel yang terlalu gelap/terang latar belakang)
+    mask = (hsv[:, :, 1] > 25) & (hsv[:, :, 2] > 25)
+    if not np.any(mask):
+        mask = np.ones((roi.shape[0], roi.shape[1]), dtype=bool)
 
-    # Indikator kondisi visual berdasarkan deteksi YOLO dan kecerahan
-    if "fresh" in label_yolo.lower():
+    h_mean = float(np.mean(hsv[:, :, 0][mask]))
+    s_mean = float(np.mean(hsv[:, :, 1][mask]))
+    v_mean = float(np.mean(hsv[:, :, 2][mask]))
+
+    # Analisis bercak kerusakan / bintik pembusukan kecokelatan pada kulit
+    bercak_mask = ((hsv[:, :, 2] < 90) | ((hsv[:, :, 0] >= 10) & (hsv[:, :, 0] <= 35) & (hsv[:, :, 1] < 130))) & mask
+    rasio_bercak = float(np.sum(bercak_mask) / np.sum(mask))
+
+    label_lower = label_yolo.lower()
+
+    # Kasus A: Jika label YOLO adalah hasil model custom (memiliki kata 'fresh' atau 'rotten')
+    if "rotten" in label_lower:
+        skor_kondisi = 20.0
+        skor_warna = 85.0
+        return skor_warna, skor_kondisi
+    elif "fresh" in label_lower:
         skor_kondisi = 85.0
-    else:
+        # Cek apakah mentah (hijau) atau matang
+        if 35 <= h_mean <= 85:
+            skor_warna = 25.0
+        else:
+            skor_warna = 55.0
+        return skor_warna, skor_kondisi
+
+    # Kasus B: Jika label YOLO adalah kelas dasar COCO ('apple', 'banana', 'orange', 'carrot')
+    # Analisis dilakukan secara objektif oleh OpenCV berdasarkan saturasi, kecerahan, dan rasio bercak
+    if rasio_bercak > 0.22 or s_mean < 70:
         skor_kondisi = 25.0
-        skor_warna = 90.0
+        skor_warna = 85.0   # Lewat matang / busuk
+    elif rasio_bercak > 0.12 or s_mean < 95:
+        skor_kondisi = 55.0
+        skor_warna = 60.0   # Kualitas sedang / mulai menurun
+    else:
+        skor_kondisi = 85.0 # Kondisi baik / segar
+        if 35 <= h_mean <= 85:
+            skor_warna = 25.0  # Mentah
+        else:
+            skor_warna = 55.0  # Matang
 
     return skor_warna, skor_kondisi
 
@@ -241,7 +282,7 @@ def dapatkan_nama_buah(label):
 # ----------------------------------------------------------------------
 def proses_deteksi(frame):
     """Menjalankan deteksi YOLO, ekstraksi citra, dan Fuzzy Logic"""
-    results = model(frame)
+    results = model(frame, verbose=False)
     hasil_deteksi = []
     label_counts = {}
 
@@ -255,63 +296,52 @@ def proses_deteksi(frame):
             confidence = float(box.conf[0])
             label = names[cls_id]
 
-            # Filter confidence (0.20 agar sangat peka terhadap objek di depan kamera)
-            if confidence > 0.20:
+            # Filter: HANYA PROSES OBJEK BUAH SESUAI FOCUSED_CLASSES
+            # Objek lain seperti manusia (person), kursi, hp, dll TIDAK digambar box-nya
+            if confidence > 0.20 and label in focused_classes:
                 label_counts[label] = label_counts.get(label, 0) + 1
 
-                # Jika objek terdeteksi adalah buah/sayuran
-                if label in buah_classes:
-                    # Ambil area ROI buah
-                    roi = frame[y1:y2, x1:x2]
-                    skor_warna, skor_kondisi = ekstrak_fitur_citra(roi, label)
+                # Ambil area ROI buah
+                roi = frame[max(0, y1):max(0, y2), max(0, x1):max(0, x2)]
+                skor_warna, skor_kondisi = ekstrak_fitur_citra(roi, label)
 
-                    # Evaluasi Fuzzy
-                    skor_fuzzy, kematangan, kesegaran, tag, warna_box = hitung_kesegaran_fuzzy(skor_warna, skor_kondisi)
-                    nama_buah = dapatkan_nama_buah(label)
+                # Evaluasi Fuzzy
+                skor_fuzzy, kematangan, kesegaran, tag, warna_box = hitung_kesegaran_fuzzy(skor_warna, skor_kondisi)
+                nama_buah = dapatkan_nama_buah(label)
 
-                    hasil_deteksi.append({
-                        "buah": nama_buah,
-                        "label": label,
-                        "confidence": confidence * 100.0,
-                        "kematangan": kematangan,
-                        "kesegaran": kesegaran,
-                        "skor_kesegaran": skor_fuzzy,
-                        "tag": tag
-                    })
+                hasil_deteksi.append({
+                    "buah": nama_buah,
+                    "label": label,
+                    "confidence": confidence * 100.0,
+                    "kematangan": kematangan,
+                    "kesegaran": kesegaran,
+                    "skor_kesegaran": skor_fuzzy,
+                    "tag": tag
+                })
 
-                    # Gambar bounding box berwarna berdasarkan kesegaran
-                    cv2.rectangle(frame, (x1, y1), (x2, y2), warna_box, 2)
-                    teks = f"{nama_buah.upper()} {tag} {confidence*100:.0f}%"
-                    cv2.putText(
-                        frame,
-                        teks,
-                        (x1, y1 - 10),
-                        cv2.FONT_HERSHEY_PLAIN,
-                        1.2,
-                        warna_box,
-                        2
-                    )
-                else:
-                    # Jika objek umum seperti manusia (person), botol, dll sesuai YOLO.py praktikum
-                    # Tetap gambar bounding box hijau agar pengguna tahu model aktif bekerja!
-                    cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                    cv2.putText(
-                        frame,
-                        f"{label} {confidence*100:.0f}%",
-                        (x1, y1 - 10),
-                        cv2.FONT_HERSHEY_PLAIN,
-                        1.2,
-                        (0, 255, 0),
-                        2
-                    )
+                # Gambar bounding box berwarna berdasarkan kesegaran (Hijau/Kuning/Merah)
+                cv2.rectangle(frame, (x1, y1), (x2, y2), warna_box, 2)
+                teks = f"{nama_buah.upper()} {tag} {confidence*100:.0f}%"
+                cv2.putText(
+                    frame,
+                    teks,
+                    (x1, max(20, y1 - 10)),
+                    cv2.FONT_HERSHEY_PLAIN,
+                    1.2,
+                    warna_box,
+                    2
+                )
 
-        # Tampilkan teks ringkasan jumlah objek di pojok kiri atas (persis seperti di YOLO.py praktikum)
+        # Tampilkan ringkasan status di pojok kiri atas (seperti di YOLO.py praktikum)
         if label_counts:
             summary = ", ".join([f"{v} {k}" for k, v in label_counts.items() if v > 0])
             box_padding = 12
             (text_width, text_height), _ = cv2.getTextSize(summary, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
             cv2.rectangle(frame, (5, 5), (5 + text_width + box_padding, 5 + text_height + box_padding), (0, 255, 0), -1)
             cv2.putText(frame, summary, (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 2, cv2.LINE_AA)
+        else:
+            # Petunjuk di layar saat belum ada buah yang terdeteksi
+            cv2.putText(frame, "[SCANNER] Arahkan kamera ke buah...", (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 200, 200), 2, cv2.LINE_AA)
 
     return frame, hasil_deteksi
 
@@ -350,14 +380,44 @@ def cetak_laporan(hasil_deteksi):
 # 6. MENU UTAMA PROGRAM
 # ----------------------------------------------------------------------
 def mode_gambar():
-    """Mode membaca gambar (sesuai ReadImageData.py)"""
-    path = input("\nMasukkan path gambar (atau tekan enter untuk gambar default): ").strip()
-    if not path:
-        # Gunakan contoh gambar dari dataset test jika kosong
-        path = "freshness  fruits and vegetables.v7i.yolov8/test/images/freshApple-1-_jpg.rf.ee1e70df72b18faa032bf3f7b42e12cb.jpg"
+    """Mode membaca gambar dengan pilihan preset atau path kustom (sesuai ReadImageData.py)"""
+    test_dir = "freshness  fruits and vegetables.v7i.yolov8/test/images"
 
-    if not os.path.exists(path):
-        print(f"[ERROR] File {path} tidak ditemukan!")
+    def cari_contoh(prefix):
+        matches = glob.glob(f"{test_dir}/{prefix}*")
+        return matches[0] if matches else None
+
+    print("""
+----------------------------------------------------------------
+PILIH SUMBER GAMBAR:
+[1] Contoh Apel Segar     (freshApple)
+[2] Contoh Apel Busuk     (rottenApple)
+[3] Contoh Pisang Segar   (freshBanana)
+[4] Contoh Pisang Busuk   (rottenBanana)
+[5] Contoh Mentimun Segar (freshCucumber)
+[6] Contoh Mangga Busuk   (rottenMango)
+[7] Masukkan Path Gambar Sendiri / Kustom
+----------------------------------------------------------------""")
+    pilihan_img = input("Pilih (1-7) [Default 1]: ").strip()
+
+    path = None
+    if pilihan_img == "1" or pilihan_img == "":
+        path = cari_contoh("freshApple")
+    elif pilihan_img == "2":
+        path = cari_contoh("rottenApple")
+    elif pilihan_img == "3":
+        path = cari_contoh("freshBanana")
+    elif pilihan_img == "4":
+        path = cari_contoh("rottenBanana")
+    elif pilihan_img == "5":
+        path = cari_contoh("freshCucumber")
+    elif pilihan_img == "6":
+        path = cari_contoh("rottenMango")
+    elif pilihan_img == "7":
+        path = input("Masukkan path gambar: ").strip()
+
+    if not path or not os.path.exists(path):
+        print(f"[ERROR] File '{path}' tidak ditemukan!")
         return
 
     img = cv2.imread(path)
@@ -377,7 +437,6 @@ def mode_gambar():
 
 def mode_video(source=0):
     """Mode membaca video atau webcam (sesuai ReadDisplayVideo.py & YOLO.py)"""
-    # Buka video atau kamera langsung dengan cv2.VideoCapture persis seperti di praktikum
     cap = cv2.VideoCapture(source)
 
     if not cap.isOpened():
@@ -387,6 +446,7 @@ def mode_video(source=0):
 
     sumber_teks = f"Kamera Indeks {source}" if isinstance(source, int) else str(source)
     print(f"\n[INFO] Pemindaian dimulai pada: {sumber_teks}")
+    print("Tips: Dekatkan buah ke depan kamera agar terdeteksi dengan jelas.")
     print("Tekan 'q' pada jendela video untuk keluar.")
 
     terakhir_deteksi = []
@@ -419,7 +479,7 @@ def main():
   Sistem Deteksi Kematangan, Kesegaran, dan Nutrisi Buah
 ================================================================
 Pilihan:
-[1] Scan dari Gambar
+[1] Scan dari Gambar (Preset Dataset / File Sendiri)
 [2] Scan dari Video
 [3] Scan dari Webcam Laptop (Kamera 0)
 [4] Scan dari Kamera Eksternal / USB (Kamera 1)
