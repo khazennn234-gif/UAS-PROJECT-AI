@@ -72,7 +72,8 @@ python smart_fruit_scanner.py
 Pilihan menu yang tersedia:
 - **[1] Scan dari Gambar**: Membaca dan menganalisis file citra foto buah.
 - **[2] Scan dari Video**: Membaca file rekaman video buah frame-by-frame.
-- **[3] Scan dari Webcam**: Deteksi langsung secara real-time melalui kamera laptop.
+- **[3] Scan dari Webcam Laptop**: Deteksi langsung menggunakan kamera bawaan laptop (indeks 0).
+- **[4] Scan dari Kamera Eksternal**: Deteksi langsung menggunakan kamera USB / webcam eksternal (indeks 1 atau lainnya).
 - **[0] Keluar**: Menutup aplikasi.
 
 ---

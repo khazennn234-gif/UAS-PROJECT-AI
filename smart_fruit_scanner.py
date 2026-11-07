@@ -348,12 +348,22 @@ def mode_gambar():
 
 def mode_video(source=0):
     """Mode membaca video atau webcam (sesuai ReadDisplayVideo.py & YOLO.py)"""
-    cap = cv2.VideoCapture(source)
+    # Jika source berupa angka (webcam internal atau eksternal)
+    if isinstance(source, int):
+        # Coba buka kamera dengan DirectShow terlebih dahulu (optimal untuk Windows)
+        cap = cv2.VideoCapture(source, cv2.CAP_DSHOW)
+        if not cap.isOpened():
+            cap = cv2.VideoCapture(source)
+    else:
+        cap = cv2.VideoCapture(source)
+
     if not cap.isOpened():
-        print("[ERROR] Tidak dapat membuka sumber video atau kamera!")
+        print(f"[ERROR] Tidak dapat membuka sumber video atau kamera (Indeks: {source})!")
+        print("Tips: Pastikan kamera eksternal sudah terhubung via USB dan tidak sedang digunakan aplikasi lain.")
         return
 
-    print("\n[INFO] Pemindaian video/kamera dimulai.")
+    sumber_teks = f"Kamera Indeks {source}" if isinstance(source, int) else str(source)
+    print(f"\n[INFO] Pemindaian dimulai pada: {sumber_teks}")
     print("Tekan 'q' pada jendela video untuk keluar.")
 
     terakhir_deteksi = []
@@ -388,10 +398,11 @@ def main():
 Pilihan:
 [1] Scan dari Gambar
 [2] Scan dari Video
-[3] Scan dari Webcam Kamera (Real-time)
+[3] Scan dari Webcam Laptop (Kamera 0)
+[4] Scan dari Kamera Eksternal / USB (Kamera 1)
 [0] Keluar
 ----------------------------------------------------------------""")
-        pilihan = input("Pilih menu (0-3): ").strip()
+        pilihan = input("Pilih menu (0-4): ").strip()
 
         if pilihan == "1":
             mode_gambar()
@@ -402,7 +413,13 @@ Pilihan:
             else:
                 print("[ERROR] Path video tidak boleh kosong.")
         elif pilihan == "3":
+            # Kamera internal laptop (indeks 0)
             mode_video(0)
+        elif pilihan == "4":
+            # Kamera eksternal USB (biasanya indeks 1, atau bisa dimasukkan angka lain)
+            idx = input("Masukkan indeks kamera eksternal [Default 1]: ").strip()
+            cam_idx = int(idx) if idx.isdigit() else 1
+            mode_video(cam_idx)
         elif pilihan == "0":
             print("\nProgram selesai. Terima kasih!")
             break
