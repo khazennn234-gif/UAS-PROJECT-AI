@@ -348,14 +348,8 @@ def mode_gambar():
 
 def mode_video(source=0):
     """Mode membaca video atau webcam (sesuai ReadDisplayVideo.py & YOLO.py)"""
-    # Jika source berupa angka (webcam internal atau eksternal)
-    if isinstance(source, int):
-        # Coba buka kamera dengan DirectShow terlebih dahulu (optimal untuk Windows)
-        cap = cv2.VideoCapture(source, cv2.CAP_DSHOW)
-        if not cap.isOpened():
-            cap = cv2.VideoCapture(source)
-    else:
-        cap = cv2.VideoCapture(source)
+    # Buka video atau kamera langsung dengan cv2.VideoCapture persis seperti di praktikum
+    cap = cv2.VideoCapture(source)
 
     if not cap.isOpened():
         print(f"[ERROR] Tidak dapat membuka sumber video atau kamera (Indeks: {source})!")
