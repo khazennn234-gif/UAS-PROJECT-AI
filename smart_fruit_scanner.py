@@ -28,11 +28,12 @@ from skfuzzy import control as ctrl
 # ----------------------------------------------------------------------
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-# Prioritaskan model hasil fine-tuning dataset buah (17 kelas)
+# Prioritaskan model YOLO paling akurat yang tersedia
 model_candidates = [
     "best_fruit.pt",
+    "yolo11m.pt",
+    "runs/fruit_freshness/yolo11_accurate_fruit/weights/best.pt",
     "runs/fruit_freshness/smart_fruit_scanner/weights/best.pt",
-    "runs/detect/runs/fruit_freshness/smart_fruit_scanner/weights/best.pt",
     "yolov8n.pt"
 ]
 
@@ -46,7 +47,11 @@ print(f"[INFO] Memuat model YOLO: {model_path} pada perangkat: {device.upper()}"
 model = YOLO(model_path)
 model.to(device)
 
-# Daftar semua kelas buah dan sayuran yang didukung
+# Batas kepercayaan (Confidence Threshold)
+# Menggunakan 0.40 agar sangat akurat dan menyaring deteksi palsu (kursi, meja, dll)
+CONFIDENCE_THRESHOLD = 0.40
+
+# Daftar semua kelas buah dan sayur yang didukung
 buah_classes = [
     # 17 Kelas dari Dataset Roboflow
     'fresh apple', 'fresh banana', 'fresh bellpepper', 'fresh carrot',
@@ -54,12 +59,12 @@ buah_classes = [
     'rotten apple', 'rotten banana', 'rotten carrot', 'rotten cucumber',
     'rotten mango', 'rotten orange', 'rotten potato', 'rotten tomato',
     'rottenbellpepper',
-    # Kelas dari COCO pretrained (jika menggunakan yolov8n.pt)
+    # Kelas dari model COCO (jika menggunakan yolo11m.pt / yolov8n.pt)
     'apple', 'banana', 'orange', 'carrot', 'broccoli'
 ]
 
 # HANYA kelas buah yang dimasukkan ke focused_classes
-# Objek selain buah (orang, kursi, handphone, dll) TIDAK akan diproses
+# Objek non-buah (person, chair, meja, hp, dll) diabaikan sepenuhnya
 focused_classes = buah_classes
 
 # ----------------------------------------------------------------------
@@ -215,59 +220,47 @@ def hitung_kesegaran_fuzzy(skor_warna, skor_kondisi):
 
 # ----------------------------------------------------------------------
 # 4. EKSTRAKSI FITUR CITRA MENGGUNAKAN OPENCV
-# (Menggunakan fungsi dasar OpenCV: cvtColor, mean, mask)
+# (Menggunakan fungsi dasar OpenCV: cvtColor, mean sederhana)
 # ----------------------------------------------------------------------
 def ekstrak_fitur_citra(roi, label_yolo):
-    """Mengekstrak rata-rata warna, saturasi, dan kondisi visual buah"""
+    """Mengekstrak rata-rata warna dan kondisi visual buah menggunakan fungsi dasar OpenCV"""
     if roi is None or roi.size == 0:
         return 50.0, 50.0
 
-    # Konversi ke ruang warna HSV menggunakan OpenCV
+    # Konversi ke ruang warna HSV menggunakan cv2.cvtColor dasar
     hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
 
-    # Masking piksel buah (mengabaikan piksel yang terlalu gelap/terang latar belakang)
-    mask = (hsv[:, :, 1] > 25) & (hsv[:, :, 2] > 25)
-    if not np.any(mask):
-        mask = np.ones((roi.shape[0], roi.shape[1]), dtype=bool)
-
-    h_mean = float(np.mean(hsv[:, :, 0][mask]))
-    s_mean = float(np.mean(hsv[:, :, 1][mask]))
-    v_mean = float(np.mean(hsv[:, :, 2][mask]))
-
-    # Analisis bercak kerusakan / bintik pembusukan kecokelatan pada kulit
-    bercak_mask = ((hsv[:, :, 2] < 90) | ((hsv[:, :, 0] >= 10) & (hsv[:, :, 0] <= 35) & (hsv[:, :, 1] < 130))) & mask
-    rasio_bercak = float(np.sum(bercak_mask) / np.sum(mask))
+    # Rata-rata komponen warna (Hue), saturasi (Saturation), dan kecerahan (Value)
+    h_mean = float(np.mean(hsv[:, :, 0]))
+    s_mean = float(np.mean(hsv[:, :, 1]))
+    v_mean = float(np.mean(hsv[:, :, 2]))
 
     label_lower = label_yolo.lower()
 
-    # Kasus A: Jika label YOLO adalah hasil model custom (memiliki kata 'fresh' atau 'rotten')
+    # Kasus 1: Label hasil deteksi mengandung status 'rotten' atau 'fresh'
     if "rotten" in label_lower:
         skor_kondisi = 20.0
         skor_warna = 85.0
         return skor_warna, skor_kondisi
     elif "fresh" in label_lower:
         skor_kondisi = 85.0
-        # Cek apakah mentah (hijau) atau matang
-        if 35 <= h_mean <= 85:
-            skor_warna = 25.0
-        else:
-            skor_warna = 55.0
+        skor_warna = 25.0 if (35 <= h_mean <= 85) else 55.0
         return skor_warna, skor_kondisi
 
-    # Kasus B: Jika label YOLO adalah kelas dasar COCO ('apple', 'banana', 'orange', 'carrot')
-    # Analisis dilakukan secara objektif oleh OpenCV berdasarkan saturasi, kecerahan, dan rasio bercak
-    if rasio_bercak > 0.22 or s_mean < 70:
+    # Kasus 2: Label umum (misal 'apple', 'banana', 'orange', 'carrot' dari YOLO)
+    # Ditentukan secara objektif menggunakan saturasi dan kecerahan OpenCV sederhana
+    if s_mean < 70 or v_mean < 70:
+        # Warna kusam, gelap, atau memudar (indikasi penurunan kesegaran / busuk)
         skor_kondisi = 25.0
-        skor_warna = 85.0   # Lewat matang / busuk
-    elif rasio_bercak > 0.12 or s_mean < 95:
+        skor_warna = 85.0
+    elif s_mean < 95:
+        # Kualitas sedang / mulai menurun
         skor_kondisi = 55.0
-        skor_warna = 60.0   # Kualitas sedang / mulai menurun
+        skor_warna = 60.0
     else:
-        skor_kondisi = 85.0 # Kondisi baik / segar
-        if 35 <= h_mean <= 85:
-            skor_warna = 25.0  # Mentah
-        else:
-            skor_warna = 55.0  # Matang
+        # Warna cerah dan segar
+        skor_kondisi = 85.0
+        skor_warna = 25.0 if (35 <= h_mean <= 85) else 55.0
 
     return skor_warna, skor_kondisi
 
@@ -281,10 +274,13 @@ def dapatkan_nama_buah(label):
 # (Mengikuti gaya visualisasi di YOLO.py praktikum)
 # ----------------------------------------------------------------------
 def proses_deteksi(frame):
-    """Menjalankan deteksi YOLO, ekstraksi citra, dan Fuzzy Logic"""
-    results = model(frame, verbose=False)
+    """Menjalankan deteksi YOLO, ekstraksi citra OpenCV, dan evaluasi Fuzzy Logic"""
+    results = model(frame, conf=CONFIDENCE_THRESHOLD, verbose=False)
     hasil_deteksi = []
     label_counts = {}
+
+    frame_h, frame_w = frame.shape[:2]
+    total_area = frame_h * frame_w
 
     for result in results:
         boxes = result.boxes
@@ -296,43 +292,50 @@ def proses_deteksi(frame):
             confidence = float(box.conf[0])
             label = names[cls_id]
 
-            # Filter: HANYA PROSES OBJEK BUAH SESUAI FOCUSED_CLASSES
-            # Objek lain seperti manusia (person), kursi, hp, dll TIDAK digambar box-nya
-            if confidence > 0.20 and label in focused_classes:
-                label_counts[label] = label_counts.get(label, 0) + 1
+            # 1. Filter: Hanya proses objek buah sesuai focused_classes
+            if label not in focused_classes or confidence < CONFIDENCE_THRESHOLD:
+                continue
 
-                # Ambil area ROI buah
-                roi = frame[max(0, y1):max(0, y2), max(0, x1):max(0, x2)]
-                skor_warna, skor_kondisi = ekstrak_fitur_citra(roi, label)
+            # Abaikan noise artefak sangat kecil (kurang dari 15x15 piksel)
+            box_w = x2 - x1
+            box_h = y2 - y1
+            if box_w < 15 or box_h < 15:
+                continue
 
-                # Evaluasi Fuzzy
-                skor_fuzzy, kematangan, kesegaran, tag, warna_box = hitung_kesegaran_fuzzy(skor_warna, skor_kondisi)
-                nama_buah = dapatkan_nama_buah(label)
+            label_counts[label] = label_counts.get(label, 0) + 1
 
-                hasil_deteksi.append({
-                    "buah": nama_buah,
-                    "label": label,
-                    "confidence": confidence * 100.0,
-                    "kematangan": kematangan,
-                    "kesegaran": kesegaran,
-                    "skor_kesegaran": skor_fuzzy,
-                    "tag": tag
-                })
+            # Ambil area ROI buah
+            roi = frame[max(0, y1):max(0, y2), max(0, x1):max(0, x2)]
+            skor_warna, skor_kondisi = ekstrak_fitur_citra(roi, label)
 
-                # Gambar bounding box berwarna berdasarkan kesegaran (Hijau/Kuning/Merah)
-                cv2.rectangle(frame, (x1, y1), (x2, y2), warna_box, 2)
-                teks = f"{nama_buah.upper()} {tag} {confidence*100:.0f}%"
-                cv2.putText(
-                    frame,
-                    teks,
-                    (x1, max(20, y1 - 10)),
-                    cv2.FONT_HERSHEY_PLAIN,
-                    1.2,
-                    warna_box,
-                    2
-                )
+            # Evaluasi Fuzzy Logic
+            skor_fuzzy, kematangan, kesegaran, tag, warna_box = hitung_kesegaran_fuzzy(skor_warna, skor_kondisi)
+            nama_buah = dapatkan_nama_buah(label)
 
-        # Tampilkan ringkasan status di pojok kiri atas (seperti di YOLO.py praktikum)
+            hasil_deteksi.append({
+                "buah": nama_buah,
+                "label": label,
+                "confidence": confidence * 100.0,
+                "kematangan": kematangan,
+                "kesegaran": kesegaran,
+                "skor_kesegaran": skor_fuzzy,
+                "tag": tag
+            })
+
+            # Gambar bounding box berwarna berdasarkan kesegaran (Hijau/Kuning/Merah)
+            cv2.rectangle(frame, (x1, y1), (x2, y2), warna_box, 2)
+            teks = f"{nama_buah.upper()} {tag} {confidence*100:.0f}%"
+            cv2.putText(
+                frame,
+                teks,
+                (x1, max(20, y1 - 10)),
+                cv2.FONT_HERSHEY_PLAIN,
+                1.2,
+                warna_box,
+                2
+            )
+
+        # Tampilkan ringkasan jumlah objek di pojok kiri atas (sesuai YOLO.py praktikum)
         if label_counts:
             summary = ", ".join([f"{v} {k}" for k, v in label_counts.items() if v > 0])
             box_padding = 12
@@ -340,7 +343,7 @@ def proses_deteksi(frame):
             cv2.rectangle(frame, (5, 5), (5 + text_width + box_padding, 5 + text_height + box_padding), (0, 255, 0), -1)
             cv2.putText(frame, summary, (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 2, cv2.LINE_AA)
         else:
-            # Petunjuk di layar saat belum ada buah yang terdeteksi
+            # Petunjuk jika belum ada buah yang terdeteksi di depan kamera
             cv2.putText(frame, "[SCANNER] Arahkan kamera ke buah...", (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 200, 200), 2, cv2.LINE_AA)
 
     return frame, hasil_deteksi
