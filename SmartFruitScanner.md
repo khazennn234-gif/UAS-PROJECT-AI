@@ -9,11 +9,11 @@
 
 Sistem berbasis AI yang mendeteksi jenis buah/sayuran serta memperkirakan tingkat kematangan dan kesegarannya melalui citra atau kamera secara real-time. Sistem juga menyajikan informasi nutrisi praktis untuk membantu konsumen awam memilih buah secara objektif.
 
-Program ini dirancang langsung berdasarkan hasil codingan modul praktikum:
-1. **YOLO.py** - Deteksi objek dan pembuatan bounding box
-2. **ReadImageData.py** - Membaca dan menampilkan citra dengan OpenCV
-3. **ReadDisplayVideo.py** - Membaca aliran frame video dan kamera langsung
-4. **FUZZY.py** - Sistem inferensi Fuzzy Logic (Antecedent, Consequent, Rules)
+Program ini menggabungkan dan mengintegrasikan seluruh materi modul praktikum ke dalam satu kesatuan sistem:
+1. **Object Detection (YOLO)** - Deteksi objek buah dan pembuatan bounding box
+2. **Computer Vision (OpenCV)** - Membaca citra gambar dan video stream kamera
+3. **Fuzzy Logic (Scikit-Fuzzy)** - Sistem inferensi penentuan tingkat kesegaran
+4. **Data Preprocessing & Knowledge Base** - Normalisasi fitur dan basis pengetahuan nutrisi edukatif
 
 ---
 
