@@ -449,13 +449,20 @@ def scan_gambar(image_path=None):
     model = get_yolo_model()
     fuzzy_sim = build_fruit_fuzzy_system()
 
-    # Jika image_path kosong, ambil contoh dari dataset test
+    # Jika image_path kosong, ambil contoh dari sample_images atau dataset test
     if not image_path or not os.path.exists(image_path):
-        sample_pattern = os.path.join(BASE_DIR, "freshness  fruits and vegetables.v7i.yolov8", "test", "images", "*.jpg")
-        samples = glob.glob(sample_pattern)
+        sample_patterns = [
+            os.path.join(BASE_DIR, "sample_images", "*.jpg"),
+            os.path.join(BASE_DIR, "freshness  fruits and vegetables.v7i.yolov8", "test", "images", "*.jpg")
+        ]
+        samples = []
+        for pat in sample_patterns:
+            samples = glob.glob(pat)
+            if samples:
+                break
         if samples:
             image_path = samples[0]
-            print(f"[*] Menggunakan gambar sampel dari dataset test: {os.path.basename(image_path)}")
+            print(f"[*] Menggunakan gambar sampel: {os.path.basename(image_path)}")
         else:
             print("❌ Tidak ada file gambar yang dapat diproses!")
             return
@@ -558,10 +565,17 @@ def uji_mandiri_pipeline():
     print("   🧪 DEMONSTRASI PENGUJIAN LENGKAP SISTEM & 5 MODUL")
     print("=" * 65)
 
-    sample_pattern = os.path.join(BASE_DIR, "freshness  fruits and vegetables.v7i.yolov8", "test", "images", "*.jpg")
-    samples = glob.glob(sample_pattern)
+    sample_patterns = [
+        os.path.join(BASE_DIR, "sample_images", "*.jpg"),
+        os.path.join(BASE_DIR, "freshness  fruits and vegetables.v7i.yolov8", "test", "images", "*.jpg")
+    ]
+    samples = []
+    for pat in sample_patterns:
+        samples = glob.glob(pat)
+        if samples:
+            break
     if not samples:
-        print("❌ Sampel citra tidak ditemukan di folder test!")
+        print("❌ Sampel citra tidak ditemukan di folder sample_images atau test!")
         return
 
     sample_img_path = samples[0]

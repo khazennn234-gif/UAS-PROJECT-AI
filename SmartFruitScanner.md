@@ -75,7 +75,21 @@ Setiap buah yang terdeteksi secara otomatis dicocokkan dengan profil nutrisi:
 
 ---
 
-## 6. Perbandingan 2 Versi Program
+## 6. Model Training & Sample Images
+
+### Status Model Training
+Model yang digunakan adalah **YOLOv11** (`best_fruit.pt`) yang telah dilatih secara khusus:
+- **Arsitektur**: YOLOv11 Nano fine-tuned pada 17 kelas komoditas buah & sayur.
+- **Durasi Training**: 15 epoch pada GPU CUDA (mAP@50 mencapai ~69%, Precision 65%, Recall 71%).
+- **Negative Background Suppression**: Dilatih dengan citra negatif latar ruangan (kursi, sofa, meja, lantai kayu) agar model tidak mengalami *false positive* (misal: kursi dikira kentang/pisang).
+- **Status Bobot**: File `best_fruit.pt` sudah tersedia langsung di repository sehingga pengguna/penguji tidak perlu melatih ulang dari nol.
+
+### Folder Contoh Gambar (`sample_images/`)
+Dataset asli Roboflow berisi hampir 10.000 foto (>300 MB) sehingga sengaja tidak dimasukkan seluruhnya ke Git agar proses clone tetap ringan dan cepat. Sebagai gantinya, repository menyertakan folder **`sample_images/`** yang berisi 16 sampel gambar buah segar dan busuk siap uji (Apel, Pisang, Mentimun, Mangga, Jeruk, Wortel, Kentang, Paprika).
+
+---
+
+## 7. Perbandingan 2 Versi Program
 
 Untuk memenuhi kebutuhan laporan, demo, serta keselarasan modul praktikum, repository ini menyediakan **2 versi program**:
 
@@ -90,7 +104,7 @@ Untuk memenuhi kebutuhan laporan, demo, serta keselarasan modul praktikum, repos
 
 ---
 
-## 7. Cara Menjalankan Program
+## 8. Cara Menjalankan Program
 
 ### Menjalankan Versi 2 (Praktikum Murni & YOLOv11 Anti False-Positive)
 ```powershell

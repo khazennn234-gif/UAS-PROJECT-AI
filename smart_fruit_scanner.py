@@ -384,11 +384,18 @@ def cetak_laporan(hasil_deteksi):
 # ----------------------------------------------------------------------
 def mode_gambar():
     """Mode membaca gambar dengan pilihan preset atau path kustom (sesuai ReadImageData.py)"""
-    test_dir = "freshness  fruits and vegetables.v7i.yolov8/test/images"
+    search_dirs = [
+        "sample_images",
+        "freshness  fruits and vegetables.v7i.yolov8/test/images"
+    ]
 
     def cari_contoh(prefix):
-        matches = glob.glob(f"{test_dir}/{prefix}*")
-        return matches[0] if matches else None
+        for s_dir in search_dirs:
+            if os.path.exists(s_dir):
+                matches = glob.glob(f"{s_dir}/{prefix}*")
+                if matches:
+                    return matches[0]
+        return None
 
     print("""
 ----------------------------------------------------------------
