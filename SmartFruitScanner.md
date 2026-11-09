@@ -93,18 +93,25 @@ Dataset asli Roboflow berisi hampir 10.000 foto (>300 MB) sehingga sengaja tidak
 
 Repository ini menyediakan pilihan file eksekusi sesuai kebutuhan perangkat dan modul praktikum:
 
-| Aspek | Versi 2 (`smart_fruit_scanner.py`) [Standar Praktikum] | Versi RTX 3050 (`smart_fruit_scanner_rtx.py`) [GPU Optimized] | Versi 1 (`smart_fruit_scanner_v1_preprocessing.py`) |
-| :--- | :--- | :--- | :--- |
-| **Target Hardware** | Laptop standar / CPU / iGPU | Laptop dengan Dedicated GPU (NVIDIA RTX 3050 4GB VRAM) | Laptop standar / CPU |
-| **Model YOLO** | YOLOv11 (`best_fruit.pt`) | YOLOv11 (`best_fruit.pt` + CUDA GPU Acceleration) | YOLOv8n Roboflow dasar |
-| **Menu Scan Gambar** | Pilihan preset contoh + custom | **1 Pilihan Langsung**: Input path kustom gambar | Otomatis ambil sampel / file kustom |
-| **Akselerasi CUDA** | Auto-detect (CPU/CUDA) | Dioptimalkan khusus untuk GPU RTX 3050 | Auto-detect (CPU/CUDA) |
-| **Format Kode** | 100% bebas emoji, standar praktikum | 100% bebas emoji, performa tinggi | Disertai emoji dan visualisasi terminal |
-| **File Eksekusi** | `smart_fruit_scanner.py` | `smart_fruit_scanner_rtx.py` | `smart_fruit_scanner_v1_preprocessing.py` |
+| Aspek | Versi 2 (`smart_fruit_scanner.py`) [Standar Praktikum] | Versi YOLO26 (`smart_fruit_scanner_yolo26.py`) [RTX 3050 & Dataset YOLO26] | Versi RTX 3050 (`smart_fruit_scanner_rtx.py`) [GPU Optimized] | Versi 1 (`smart_fruit_scanner_v1_preprocessing.py`) |
+| :--- | :--- | :--- | :--- | :--- |
+| **Target Hardware** | Laptop standar / CPU / iGPU | Dedicated GPU (NVIDIA RTX 3050 4GB) | Dedicated GPU (NVIDIA RTX 3050 4GB) | Laptop standar / CPU |
+| **Model YOLO** | YOLOv11 (`best_fruit.pt`) | **YOLO26** (`yolo26m.pt` / `best_yolo26_fruit.pt`) | YOLOv11 (`best_fruit.pt` + CUDA) | YOLOv8n Roboflow dasar |
+| **Gunakan best_fruit.pt?** | Ya | **Tidak** (Murni arsitektur YOLO26 baru) | Ya | Tidak (model lama) |
+| **Fitur Training Menu** | Tidak ada | **Tersedia (Menu 5)**: Train dataset langsung via GPU RTX 3050 | Tidak ada | Tidak ada |
+| **Menu Scan Gambar** | Pilihan preset + custom | **1 Pilihan Langsung**: Input path kustom | **1 Pilihan Langsung**: Input path kustom | Otomatis ambil sampel / custom |
+| **Akselerasi CUDA** | Auto-detect (CPU/CUDA) | Dioptimalkan khusus GPU RTX 3050 | Dioptimalkan khusus GPU RTX 3050 | Auto-detect (CPU/CUDA) |
+| **File Eksekusi** | `smart_fruit_scanner.py` | `smart_fruit_scanner_yolo26.py` | `smart_fruit_scanner_rtx.py` | `smart_fruit_scanner_v1_preprocessing.py` |
 
 ---
 
 ## 8. Cara Menjalankan Program
+
+### Menjalankan Versi YOLO26 (Murni Model YOLO26, Tanpa best_fruit.pt, Fitur Training GPU)
+Khusus untuk pengguna yang mengunduh dataset format YOLO26 dan menggunakan GPU RTX 3050:
+```powershell
+python smart_fruit_scanner_yolo26.py
+```
 
 ### Menjalankan Versi GPU RTX 3050 (Akselerasi Tinggi & Custom Image Langsung)
 Cocok untuk pengguna laptop dengan GPU NVIDIA RTX 3050 4GB:
