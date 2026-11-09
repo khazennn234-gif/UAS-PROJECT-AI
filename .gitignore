@@ -18,6 +18,7 @@ freshness  fruits and vegetables.v7i.yolov8/test/
 *.avi
 screenshot_*.jpg
 hasil_analisis_*.jpg
+Cuplikan layar*.png
 
 # OS generated files
 Thumbs.db

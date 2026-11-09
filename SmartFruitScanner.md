@@ -89,24 +89,30 @@ Dataset asli Roboflow berisi hampir 10.000 foto (>300 MB) sehingga sengaja tidak
 
 ---
 
-## 7. Perbandingan 2 Versi Program
+## 7. Perbandingan Versi Program
 
-Untuk memenuhi kebutuhan laporan, demo, serta keselarasan modul praktikum, repository ini menyediakan **2 versi program**:
+Repository ini menyediakan pilihan file eksekusi sesuai kebutuhan perangkat dan modul praktikum:
 
-| Aspek | Versi 1 (`smart_fruit_scanner_v1_preprocessing.py`) | Versi 2 (`smart_fruit_scanner.py`) [Rekomendasi Praktikum] |
-| :--- | :--- | :--- |
-| **Fokus Desain** | Mengikuti proposal awal dengan modul preprocessing lengkap | Murni selaras dengan codingan modul praktikum AI |
-| **Modul Preprocessing** | Menggunakan `sklearn.preprocessing.MinMaxScaler` & varians tekstur | Sederhana langsung via OpenCV (HSV) tanpa library `sklearn` |
-| **Model YOLO** | YOLOv8n Roboflow (Threshold 0.25) | YOLOv11 (`best_fruit.pt`) dengan Background Negative Suppression |
-| **Anti False-Positive** | Rentan salah deteksi pada perabot ruangan (kursi/sofa) | Telah dilatih mengenali latar ruangan/kursi sehingga tidak salah deteksi |
-| **Gaya Kode & Output** | Disertai emoji dan visualisasi terminal berwarna | 100% bebas emoji, format teks rapi dan bersih standar praktikum |
-| **File Eksekusi** | `smart_fruit_scanner_v1_preprocessing.py` | `smart_fruit_scanner.py` |
+| Aspek | Versi 2 (`smart_fruit_scanner.py`) [Standar Praktikum] | Versi RTX 3050 (`smart_fruit_scanner_rtx.py`) [GPU Optimized] | Versi 1 (`smart_fruit_scanner_v1_preprocessing.py`) |
+| :--- | :--- | :--- | :--- |
+| **Target Hardware** | Laptop standar / CPU / iGPU | Laptop dengan Dedicated GPU (NVIDIA RTX 3050 4GB VRAM) | Laptop standar / CPU |
+| **Model YOLO** | YOLOv11 (`best_fruit.pt`) | YOLOv11 (`best_fruit.pt` + CUDA GPU Acceleration) | YOLOv8n Roboflow dasar |
+| **Menu Scan Gambar** | Pilihan preset contoh + custom | **1 Pilihan Langsung**: Input path kustom gambar | Otomatis ambil sampel / file kustom |
+| **Akselerasi CUDA** | Auto-detect (CPU/CUDA) | Dioptimalkan khusus untuk GPU RTX 3050 | Auto-detect (CPU/CUDA) |
+| **Format Kode** | 100% bebas emoji, standar praktikum | 100% bebas emoji, performa tinggi | Disertai emoji dan visualisasi terminal |
+| **File Eksekusi** | `smart_fruit_scanner.py` | `smart_fruit_scanner_rtx.py` | `smart_fruit_scanner_v1_preprocessing.py` |
 
 ---
 
 ## 8. Cara Menjalankan Program
 
-### Menjalankan Versi 2 (Praktikum Murni & YOLOv11 Anti False-Positive)
+### Menjalankan Versi GPU RTX 3050 (Akselerasi Tinggi & Custom Image Langsung)
+Cocok untuk pengguna laptop dengan GPU NVIDIA RTX 3050 4GB:
+```powershell
+python smart_fruit_scanner_rtx.py
+```
+
+### Menjalankan Versi Standar Praktikum (CPU / All Laptop)
 ```powershell
 python smart_fruit_scanner.py
 ```
